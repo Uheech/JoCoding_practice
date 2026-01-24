@@ -247,20 +247,25 @@ export class GdmLiveAudio extends LitElement {
     if (!this.client) return;
     const model = 'gemini-2.5-flash-native-audio-preview-12-2025';
 
+    console.log('Connecting to Gemini with model:', model);
+
     try {
       this.session = await this.client.live.connect({
         model: model,
         callbacks: {
           onopen: () => {
+            console.log('Gemini Session Opened successfully');
             this.updateStatus('Connected & Ready');
           },
           onmessage: async (message: LiveServerMessage) => {
+            console.log('Message from Gemini:', message);
+            
             const parts = message.serverContent?.modelTurn?.parts;
             const audio = parts && parts.length > 0 ? parts[0].inlineData : undefined;
 
             if (audio) {
               this.updateStatus('🎙️ Speaking...');
-              console.log('Audio data received from Gemini');
+              console.log('Audio data received (length):', audio.data.length);
 
               this.nextStartTime = Math.max(
                 this.nextStartTime,
@@ -290,6 +295,7 @@ export class GdmLiveAudio extends LitElement {
 
             const interrupted = message.serverContent?.interrupted;
             if (interrupted) {
+              console.log('Gemini interrupted');
               for (const source of this.sources.values()) {
                 source.stop();
                 this.sources.delete(source);
@@ -297,11 +303,13 @@ export class GdmLiveAudio extends LitElement {
               this.nextStartTime = 0;
             }
           },
-          onerror: (e: ErrorEvent) => {
-            this.updateError(e.message);
+          onerror: (e: any) => {
+            console.error('Gemini Session Error:', e);
+            this.updateError('Session Error: ' + (e.message || JSON.stringify(e)));
           },
           onclose: (e: CloseEvent) => {
-            this.updateStatus('Close:' + e.reason);
+            console.log('Gemini Session Closed:', e.code, e.reason);
+            this.updateStatus('Session Closed: ' + e.reason);
           },
         },
         config: {
@@ -311,12 +319,12 @@ export class GdmLiveAudio extends LitElement {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: {prebuiltVoiceConfig: {voiceName: 'Orus'}},
-            // languageCode: 'en-GB'
           },
         },
       });
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error('Failed to connect to Gemini:', e);
+      this.updateError('Connection Failed: ' + e.message);
     }
   }
 
@@ -565,7 +573,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
-        <div id="version-tag"> [V7.0 - ULTIMATE] </div>
+        <div id="version-tag"> [V8.0 - DEEP DEBUG] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>
