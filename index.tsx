@@ -272,9 +272,24 @@ export class GdmLiveAudio extends LitElement {
       );
       this.sourceNode.connect(this.inputNode);
 
-      await this.inputAudioContext.audioWorklet.addModule(
-        new URL('./pcm-processor.ts', import.meta.url)
-      );
+      // AudioWorklet 코드를 Blob으로 생성하여 로드 (경로 문제 해결)
+      const workletCode = `
+        class PcmProcessor extends AudioWorkletProcessor {
+          process(inputs) {
+            const input = inputs[0];
+            if (input && input.length > 0) {
+              const pcmData = input[0];
+              this.port.postMessage(pcmData);
+            }
+            return true;
+          }
+        }
+        registerProcessor('pcm-processor', PcmProcessor);
+      `;
+      const blob = new Blob([workletCode], { type: 'application/javascript' });
+      const workletUrl = URL.createObjectURL(blob);
+
+      await this.inputAudioContext.audioWorklet.addModule(workletUrl);
 
       this.audioWorkletNode = new AudioWorkletNode(
         this.inputAudioContext,
