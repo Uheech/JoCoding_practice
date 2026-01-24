@@ -124,8 +124,8 @@ export class GdmLiveAudio extends LitElement {
             this.updateStatus('Opened');
           },
           onmessage: async (message: LiveServerMessage) => {
-            const audio =
-              message.serverContent?.modelTurn?.parts[0]?.inlineData;
+            const parts = message.serverContent?.modelTurn?.parts;
+            const audio = parts && parts.length > 0 ? parts[0].inlineData : undefined;
 
             if (audio) {
               this.nextStartTime = Math.max(
