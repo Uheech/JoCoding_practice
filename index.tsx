@@ -272,10 +272,10 @@ export class GdmLiveAudio extends LitElement {
       );
       this.sourceNode.connect(this.inputNode);
 
-      // AudioWorklet 코드를 Blob으로 생성하여 로드 (경로 문제 해결)
+      // AudioWorklet 코드를 data: URL로 생성하여 로드 (Blob보다 호환성이 높음)
       const workletCode = `
         class PcmProcessor extends AudioWorkletProcessor {
-          process(inputs) {
+          process(inputs, outputs, parameters) {
             const input = inputs[0];
             if (input && input.length > 0) {
               const pcmData = input[0];
@@ -286,10 +286,16 @@ export class GdmLiveAudio extends LitElement {
         }
         registerProcessor('pcm-processor', PcmProcessor);
       `;
-      const blob = new Blob([workletCode], { type: 'application/javascript' });
-      const workletUrl = URL.createObjectURL(blob);
+      const workletUrl = `data:application/javascript;base64,${btoa(workletCode)}`;
 
-      await this.inputAudioContext.audioWorklet.addModule(workletUrl);
+      try {
+        await this.inputAudioContext.audioWorklet.addModule(workletUrl);
+      } catch (e) {
+        console.error('Worklet loading failed, retrying with Blob...', e);
+        const blob = new Blob([workletCode], { type: 'application/javascript' });
+        const blobUrl = URL.createObjectURL(blob);
+        await this.inputAudioContext.audioWorklet.addModule(blobUrl);
+      }
 
       this.audioWorkletNode = new AudioWorkletNode(
         this.inputAudioContext,
