@@ -23,7 +23,7 @@ function decode(base64: string): Uint8Array {
   return bytes;
 }
 
-function createBlob(data: Float32Array, sampleRate: number = 16000): Blob {
+function createBlob(data: Float32Array): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
@@ -33,7 +33,7 @@ function createBlob(data: Float32Array, sampleRate: number = 16000): Blob {
 
   return {
     data: encode(new Uint8Array(int16.buffer)),
-    mimeType: `audio/pcm;rate=${sampleRate}`,
+    mimeType: 'audio/pcm;rate=16000',
   };
 }
 

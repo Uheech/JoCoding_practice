@@ -8,10 +8,10 @@ import {GoogleGenAI, LiveServerMessage, Modality, Session} from '@google/genai';
 import {LitElement, css, html} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 
-// V9.0 캐시 파괴 및 실행 확인용 알림
-console.log('!!! CRITICAL: V9.0 SCRIPT STARTING !!!');
+// V11.0 오디오 리샘플링 및 실행 확인용 알림
+console.log('!!! CRITICAL: V11.0 VOICE ENGINE STARTING !!!');
 if (typeof window !== 'undefined') {
-  alert('V9.0 Loaded! (Cache Killed)');
+  alert('V11.0 Loaded! (16kHz Voice Engine Active)');
 }
 
 import {createBlob, decode, decodeAudioData} from './utils';
@@ -439,9 +439,23 @@ export class GdmLiveAudio extends LitElement {
 
       this.audioWorkletNode.port.onmessage = (event) => {
         if (!this.isRecording || !this.session) return;
-        const pcmData = event.data;
+        const pcmData = event.data; // Float32Array (브라우저 기본 샘플 레이트)
+        
+        // 16kHz로 리샘플링 (단순 선형 보간)
+        const ratio = this.inputAudioContext.sampleRate / 16000;
+        const newLength = Math.floor(pcmData.length / ratio);
+        const resampledData = new Float32Array(newLength);
+        
+        for (let i = 0; i < newLength; i++) {
+          resampledData[i] = pcmData[Math.floor(i * ratio)];
+        }
+
+        if (this.onScreenLogs.length < 20 && Math.random() < 0.05) {
+          this.addLog(`[Audio] Sending 16kHz chunk (${newLength} samples)`);
+        }
+
         this.session.sendRealtimeInput({
-          media: createBlob(pcmData, this.inputAudioContext.sampleRate)
+          media: createBlob(resampledData)
         });
       };
 
@@ -620,7 +634,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
-        <div id="version-tag"> [V10.0 - TALK TO ME] </div>
+        <div id="version-tag"> [V11.0 - VOICE ENGINE] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>
