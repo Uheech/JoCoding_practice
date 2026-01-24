@@ -44,16 +44,32 @@ export default async function handler(
       }
     );
 
-    const data = await googleResponse.json();
+    const responseText = await googleResponse.text();
 
     if (!googleResponse.ok) {
-      throw new Error(data.error?.message || 'Failed to fetch token');
+      console.error(`Google API Error (${googleResponse.status}):`, responseText);
+      return response.status(googleResponse.status).json({ 
+        error: `Google API error (${googleResponse.status})`,
+        details: responseText.slice(0, 500) // 너무 길면 잘라서 전달
+      });
     }
 
-    // 클라이언트에게 토큰 전달
-    return response.status(200).json({ token: data.name });
+    try {
+      const data = JSON.parse(responseText);
+      // 클라이언트에게 토큰 전달
+      return response.status(200).json({ token: data.name });
+    } catch (parseError) {
+      console.error('JSON Parse Error:', responseText);
+      return response.status(500).json({ 
+        error: 'Google API가 올바른 JSON 형식을 반환하지 않았습니다.',
+        details: responseText.slice(0, 500)
+      });
+    }
   } catch (error: any) {
     console.error('Token fetch error:', error);
-    return response.status(500).json({ error: error.message });
+    return response.status(500).json({ 
+      error: '서버 내부 오류가 발생했습니다.',
+      details: error.message 
+    });
   }
 }
