@@ -97,14 +97,21 @@ export class GdmLiveAudio extends LitElement {
     try {
       // 보안 서버리스 함수로부터 임시 토큰 가져오기
       const response = await fetch('/api/token');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Server responded with ${response.status}`);
+      const text = await response.text();
+      
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`서버 응답이 올바른 형식이 아닙니다: ${text.slice(0, 100)}`);
       }
-      const { token, error } = await response.json();
 
-      if (error) throw new Error(error);
+      if (!response.ok) {
+        throw new Error(data.error || `서버 에러 (${response.status})`);
+      }
 
+      const { token } = data;
+      
       this.client = new GoogleGenAI({
         apiKey: token,
       });
