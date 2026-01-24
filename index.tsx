@@ -28,7 +28,7 @@ export class GdmLiveAudio extends LitElement {
   private nextStartTime = 0;
   private mediaStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private scriptProcessorNode: ScriptProcessorNode | null = null;
+  private audioWorkletNode: AudioWorkletNode | null = null;
   private sources = new Set<AudioBufferSourceNode>();
 
   static styles = css`
@@ -272,24 +272,23 @@ export class GdmLiveAudio extends LitElement {
       );
       this.sourceNode.connect(this.inputNode);
 
-      const bufferSize = 256;
-      this.scriptProcessorNode = this.inputAudioContext.createScriptProcessor(
-        bufferSize,
-        1,
-        1,
+      await this.inputAudioContext.audioWorklet.addModule(
+        new URL('./pcm-processor.ts', import.meta.url)
       );
 
-      this.scriptProcessorNode.onaudioprocess = (audioProcessingEvent) => {
+      this.audioWorkletNode = new AudioWorkletNode(
+        this.inputAudioContext,
+        'pcm-processor'
+      );
+
+      this.audioWorkletNode.port.onmessage = (event) => {
         if (!this.isRecording || !this.session) return;
-
-        const inputBuffer = audioProcessingEvent.inputBuffer;
-        const pcmData = inputBuffer.getChannelData(0);
-
+        const pcmData = event.data;
         this.session.sendRealtimeInput({media: createBlob(pcmData)});
       };
 
-      this.sourceNode.connect(this.scriptProcessorNode);
-      this.scriptProcessorNode.connect(this.inputAudioContext.destination);
+      this.sourceNode.connect(this.audioWorkletNode);
+      this.audioWorkletNode.connect(this.inputAudioContext.destination);
 
       this.isRecording = true;
       this.updateStatus('🔴 Recording... Capturing PCM chunks.');
@@ -308,12 +307,12 @@ export class GdmLiveAudio extends LitElement {
 
     this.isRecording = false;
 
-    if (this.scriptProcessorNode && this.sourceNode && this.inputAudioContext) {
-      this.scriptProcessorNode.disconnect();
+    if (this.audioWorkletNode && this.sourceNode && this.inputAudioContext) {
+      this.audioWorkletNode.disconnect();
       this.sourceNode.disconnect();
     }
 
-    this.scriptProcessorNode = null;
+    this.audioWorkletNode = null;
     this.sourceNode = null;
 
     if (this.mediaStream) {
