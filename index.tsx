@@ -18,6 +18,7 @@ export class GdmLiveAudio extends LitElement {
   @state() lastFailedUrl = '';
   @state() apiKey = localStorage.getItem('gemini_api_key') || '';
 
+  private workletLoaded = false;
   private client!: GoogleGenAI;
   private session!: Session;
   private inputAudioContext = new (window.AudioContext ||
@@ -328,29 +329,36 @@ export class GdmLiveAudio extends LitElement {
       );
       this.sourceNode.connect(this.inputNode);
 
-      // AudioWorklet 코드를 인라인 Blob으로 생성 (외부 파일 호출 0%)
-      const workletCode = `
-        class AudioProcessor extends AudioWorkletProcessor {
-          process(inputs) {
-            const input = inputs[0];
-            if (input && input.length > 0) {
-              const pcmData = input[0];
-              this.port.postMessage(pcmData);
+      if (!this.workletLoaded) {
+        // AudioWorklet 코드를 인라인 Blob으로 생성 (외부 파일 호출 0%)
+        const workletCode = `
+          class AudioProcessor extends AudioWorkletProcessor {
+            process(inputs) {
+              const input = inputs[0];
+              if (input && input.length > 0) {
+                const pcmData = input[0];
+                this.port.postMessage(pcmData);
+              }
+              return true;
             }
-            return true;
           }
-        }
-        registerProcessor('audio-processor', AudioProcessor);
-      `;
-      
-      const blob = new Blob([workletCode], { type: 'application/javascript' });
-      const workletUrl = URL.createObjectURL(blob);
+          try {
+            registerProcessor('audio-processor', AudioProcessor);
+          } catch (e) {
+            // 이미 등록된 경우 무시
+          }
+        `;
+        
+        const blob = new Blob([workletCode], { type: 'application/javascript' });
+        const workletUrl = URL.createObjectURL(blob);
 
-      try {
-        await this.inputAudioContext.audioWorklet.addModule(workletUrl);
-      } catch (e: any) {
-        console.error('Worklet loading failed:', e);
-        throw new Error('오디오 처리 모듈 로드 실패: ' + e.message);
+        try {
+          await this.inputAudioContext.audioWorklet.addModule(workletUrl);
+          this.workletLoaded = true;
+        } catch (e: any) {
+          console.error('Worklet loading failed:', e);
+          throw new Error('오디오 처리 모듈 로드 실패: ' + e.message);
+        }
       }
 
       this.audioWorkletNode = new AudioWorkletNode(
@@ -483,7 +491,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
-        <div id="version-tag"> [V4.0 - DEBUG MODE] </div>
+        <div id="version-tag"> [V5.0 - STABLE] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>
