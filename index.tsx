@@ -24,6 +24,7 @@ export class GdmLiveAudio extends LitElement {
   @state() error = '';
   @state() lastFailedUrl = '';
   @state() volume = 0;
+  @state() onScreenLogs: string[] = [];
   @state() apiKey = localStorage.getItem('gemini_api_key') || '';
 
   private workletLoaded = false;
@@ -184,6 +185,30 @@ export class GdmLiveAudio extends LitElement {
       background: #4caf50;
       transition: width 0.1s ease;
     }
+
+    #on-screen-console {
+      position: absolute;
+      bottom: 20px;
+      left: 10px;
+      width: 300px;
+      max-height: 150px;
+      background: rgba(0, 0, 0, 0.6);
+      color: #00ff00;
+      font-size: 11px;
+      font-family: monospace;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-y: auto;
+      z-index: 1000;
+      pointer-events: none;
+      border: 1px solid rgba(0, 255, 0, 0.2);
+    }
+
+    .log-item {
+      margin-bottom: 4px;
+      border-bottom: 1px solid rgba(0, 255, 0, 0.1);
+      padding-bottom: 2px;
+    }
   `;
 
   constructor() {
@@ -213,6 +238,12 @@ export class GdmLiveAudio extends LitElement {
 
   private initAudio() {
     this.nextStartTime = this.outputAudioContext.currentTime;
+  }
+
+  private addLog(msg: string) {
+    const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    this.onScreenLogs = [`[${time}] ${msg}`, ...this.onScreenLogs.slice(0, 9)];
+    console.log(`[UI LOG] ${msg}`);
   }
 
   private async initClient() {
@@ -254,25 +285,28 @@ export class GdmLiveAudio extends LitElement {
     if (!this.client) return;
     const model = 'gemini-2.5-flash-native-audio-preview-12-2025';
 
-    console.log('Connecting to Gemini with model:', model);
+    this.addLog(`Connecting to Gemini... (SampleRate: ${this.inputAudioContext.sampleRate}Hz)`);
 
     try {
       this.session = await this.client.live.connect({
         model: model,
         callbacks: {
           onopen: () => {
-            console.log('Gemini Session Opened successfully');
-            this.updateStatus('Connected & Ready');
+            this.addLog('✅ Gemini Session Opened!');
+            this.updateStatus('✅ Connected & Ready');
           },
           onmessage: async (message: LiveServerMessage) => {
-            console.log('Message from Gemini:', message);
+            // 모든 메시지를 화면 로그에 남김 (오디오 제외)
+            if (!message.serverContent?.modelTurn?.parts?.[0]?.inlineData) {
+              this.addLog(`Message: ${JSON.stringify(message).substring(0, 50)}...`);
+            }
             
             const parts = message.serverContent?.modelTurn?.parts;
             const audio = parts && parts.length > 0 ? parts[0].inlineData : undefined;
 
             if (audio) {
+              this.addLog('🔊 AI Response Received (Audio)');
               this.updateStatus('🎙️ Speaking...');
-              console.log('Audio data received (length):', audio.data.length);
 
               this.nextStartTime = Math.max(
                 this.nextStartTime,
@@ -302,7 +336,7 @@ export class GdmLiveAudio extends LitElement {
 
             const interrupted = message.serverContent?.interrupted;
             if (interrupted) {
-              console.log('Gemini interrupted');
+              this.addLog('⚠️ AI Interrupted');
               for (const source of this.sources.values()) {
                 source.stop();
                 this.sources.delete(source);
@@ -311,12 +345,12 @@ export class GdmLiveAudio extends LitElement {
             }
           },
           onerror: (e: any) => {
-            console.error('Gemini Session Error:', e);
+            this.addLog(`❌ Session Error: ${e.message || 'Unknown'}`);
             this.updateError('Session Error: ' + (e.message || JSON.stringify(e)));
           },
           onclose: (e: CloseEvent) => {
-            console.log('Gemini Session Closed:', e.code, e.reason);
-            this.updateStatus('Session Closed: ' + e.reason);
+            this.addLog(`🚪 Session Closed: ${e.reason || 'No reason'}`);
+            this.updateStatus('Session Closed');
           },
         },
         config: {
@@ -406,7 +440,9 @@ export class GdmLiveAudio extends LitElement {
       this.audioWorkletNode.port.onmessage = (event) => {
         if (!this.isRecording || !this.session) return;
         const pcmData = event.data;
-        this.session.sendRealtimeInput({media: createBlob(pcmData)});
+        this.session.sendRealtimeInput({
+          media: createBlob(pcmData, this.inputAudioContext.sampleRate)
+        });
       };
 
       // 5. 파이프라인 완성
@@ -530,6 +566,10 @@ export class GdmLiveAudio extends LitElement {
             `
           : ''}
 
+        <div id="on-screen-console">
+          ${this.onScreenLogs.map(log => html`<div class="log-item">${log}</div>`)}
+        </div>
+
         ${this.isRecording ? html`
           <div class="volume-meter-container">
             <div class="volume-meter-bar" style="width: ${this.volume}%"></div>
@@ -580,7 +620,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
-        <div id="version-tag"> [V9.0 - CACHE KILLED] </div>
+        <div id="version-tag"> [V10.0 - TALK TO ME] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>
