@@ -194,13 +194,16 @@ export class GdmLiveAudio extends LitElement {
         model: model,
         callbacks: {
           onopen: () => {
-            this.updateStatus('Opened');
+            this.updateStatus('Connected & Ready');
           },
           onmessage: async (message: LiveServerMessage) => {
             const parts = message.serverContent?.modelTurn?.parts;
             const audio = parts && parts.length > 0 ? parts[0].inlineData : undefined;
 
             if (audio) {
+              this.updateStatus('🎙️ Speaking...');
+              console.log('Audio data received from Gemini');
+
               this.nextStartTime = Math.max(
                 this.nextStartTime,
                 this.outputAudioContext.currentTime,
@@ -217,6 +220,9 @@ export class GdmLiveAudio extends LitElement {
               source.connect(this.outputNode);
               source.addEventListener('ended', () => {
                 this.sources.delete(source);
+                if (this.sources.size === 0) {
+                  this.updateStatus('🔴 Listening...');
+                }
               });
 
               source.start(this.nextStartTime);
@@ -241,6 +247,9 @@ export class GdmLiveAudio extends LitElement {
           },
         },
         config: {
+          systemInstruction: {
+            parts: [{ text: '당신은 친절한 한국어 음성 비서입니다. 사용자의 말에 짧고 명확하게 한국어로 답변하세요. 지금 즉시 대화를 시작할 준비가 되었습니다.' }]
+          },
           responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: {prebuiltVoiceConfig: {voiceName: 'Orus'}},
@@ -267,6 +276,7 @@ export class GdmLiveAudio extends LitElement {
     }
 
     this.inputAudioContext.resume();
+    this.outputAudioContext.resume();
 
     this.updateStatus('Requesting microphone access...');
 
@@ -315,6 +325,12 @@ export class GdmLiveAudio extends LitElement {
 
       this.audioWorkletNode.port.onmessage = (event) => {
         if (!this.isRecording || !this.session) return;
+        
+        // 사용자가 말을 하고 있을 때 상태 표시
+        if (this.status !== '🎙️ Speaking...') {
+          this.updateStatus('🔴 Hearing...');
+        }
+
         const pcmData = event.data;
         this.session.sendRealtimeInput({media: createBlob(pcmData)});
       };
