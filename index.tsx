@@ -123,6 +123,17 @@ export class GdmLiveAudio extends LitElement {
       text-decoration: none;
       font-size: 14px;
     }
+
+    #version-tag {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 10px;
+      font-family: monospace;
+      z-index: 100;
+      pointer-events: none;
+    }
   `;
 
   constructor() {
@@ -272,8 +283,30 @@ export class GdmLiveAudio extends LitElement {
       );
       this.sourceNode.connect(this.inputNode);
 
-      // public 폴더의 오디오 프로세서 파일을 직접 로드 (가장 안정적인 방식)
-      await this.inputAudioContext.audioWorklet.addModule('/audio-processor.js');
+      // AudioWorklet 코드를 인라인 Blob으로 생성 (외부 파일 호출 0%)
+      const workletCode = `
+        class AudioProcessor extends AudioWorkletProcessor {
+          process(inputs) {
+            const input = inputs[0];
+            if (input && input.length > 0) {
+              const pcmData = input[0];
+              this.port.postMessage(pcmData);
+            }
+            return true;
+          }
+        }
+        registerProcessor('audio-processor', AudioProcessor);
+      `;
+      
+      const blob = new Blob([workletCode], { type: 'application/javascript' });
+      const workletUrl = URL.createObjectURL(blob);
+
+      try {
+        await this.inputAudioContext.audioWorklet.addModule(workletUrl);
+      } catch (e: any) {
+        console.error('Worklet loading failed:', e);
+        throw new Error('오디오 처리 모듈 로드 실패: ' + e.message);
+      }
 
       this.audioWorkletNode = new AudioWorkletNode(
         this.inputAudioContext,
@@ -398,6 +431,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
+        <div id="version-tag"> [V3.0 - CLEAN] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>
