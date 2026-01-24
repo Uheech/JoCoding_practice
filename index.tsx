@@ -118,6 +118,7 @@ export class GdmLiveAudio extends LitElement {
   }
 
   private async initSession() {
+    if (!this.client) return;
     const model = 'gemini-2.5-flash-native-audio-preview-09-2025';
 
     try {
@@ -267,6 +268,10 @@ export class GdmLiveAudio extends LitElement {
   }
 
   private reset() {
+    if (!this.client) {
+      this.initClient();
+      return;
+    }
     this.session?.close();
     this.initSession();
     this.updateStatus('Session cleared.');
