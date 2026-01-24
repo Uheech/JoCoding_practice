@@ -29,17 +29,13 @@ export default async function handler(
   try {
     // Google Gemini API에 Ephemeral Token 요청
     const googleResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1alpha/models/gemini-2.0-flash-exp:generateAccessToken?key=${API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateAccessToken?key=${API_KEY}`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          config: {
-            uses: 1, // 1회 세션용
-          },
-        }),
+        body: JSON.stringify({}), // generateAccessToken은 빈 본문 또는 ttl만 허용함
       }
     );
 
