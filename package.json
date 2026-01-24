@@ -18,5 +18,8 @@
     "vite": "^5.0.0",
     "@types/three": "^0.176.0",
     "@vercel/node": "^3.0.0"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
