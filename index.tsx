@@ -15,6 +15,7 @@ export class GdmLiveAudio extends LitElement {
   @state() isRecording = false;
   @state() status = '';
   @state() error = '';
+  @state() apiKey = localStorage.getItem('gemini_api_key') || '';
 
   private client!: GoogleGenAI;
   private session!: Session;
@@ -74,6 +75,54 @@ export class GdmLiveAudio extends LitElement {
         display: none;
       }
     }
+
+    .api-key-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      color: white;
+      gap: 20px;
+      padding: 20px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    .api-key-overlay input {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 400px;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .api-key-overlay button {
+      background: #4285f4;
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .api-key-overlay a {
+      color: #8ab4f8;
+      text-decoration: none;
+      font-size: 14px;
+    }
   `;
 
   constructor() {
@@ -92,45 +141,42 @@ export class GdmLiveAudio extends LitElement {
 
   private async initClient() {
     this.initAudio();
-    this.updateStatus('Fetching secure token...');
+    
+    if (!this.apiKey) {
+      this.updateStatus('API Key required');
+      return;
+    }
+
+    this.updateStatus('Initializing...');
 
     try {
-      // 보안 서버리스 함수로부터 임시 토큰 가져오기
-      const response = await fetch('/api/token');
-      const text = await response.text();
-      console.log('Server Response Raw:', text);
-      
-      let data;
-      try {
-        data = JSON.parse(text);
-        console.log('Server Response JSON:', data);
-      } catch (e) {
-        throw new Error(`서버 응답이 올바른 형식이 아닙니다: ${text.slice(0, 100)}`);
-      }
-
-      if (!response.ok) {
-        const errorMsg = data.error || `서버 에러 (${response.status})`;
-        const details = data.details ? `\n상세: ${data.details}` : '';
-        throw new Error(errorMsg + details);
-      }
-
-      const { token } = data;
-      
       this.client = new GoogleGenAI({
-        apiKey: token,
+        apiKey: this.apiKey,
       });
 
       this.outputNode.connect(this.outputAudioContext.destination);
       this.initSession();
     } catch (e: any) {
       console.error('Failed to initialize client:', e);
-      this.updateError('Security Error: ' + e.message);
+      this.updateError('Init Error: ' + e.message);
+    }
+  }
+
+  private handleApiKeyInput(e: Event) {
+    const input = e.target as HTMLInputElement;
+    this.apiKey = input.value;
+  }
+
+  private saveApiKey() {
+    if (this.apiKey) {
+      localStorage.setItem('gemini_api_key', this.apiKey);
+      this.initClient();
     }
   }
 
   private async initSession() {
     if (!this.client) return;
-    const model = 'gemini-2.0-flash';
+    const model = 'gemini-2.5-flash-native-audio-preview-12-2025';
 
     try {
       this.session = await this.client.live.connect({
@@ -291,6 +337,25 @@ export class GdmLiveAudio extends LitElement {
   render() {
     return html`
       <div>
+        ${!this.apiKey
+          ? html`
+              <div class="api-key-overlay">
+                <h2>Gemini API Key Required</h2>
+                <p>실시간 오디오 대화를 시작하려면 API 키가 필요합니다.</p>
+                <input
+                  type="password"
+                  placeholder="Enter your Gemini API Key"
+                  .value=${this.apiKey}
+                  @input=${this.handleApiKeyInput}
+                />
+                <button @click=${this.saveApiKey}>Save & Start</button>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank"
+                  >Get an API Key from Google AI Studio</a
+                >
+              </div>
+            `
+          : ''}
+
         <div class="controls">
           <button
             id="resetButton"
