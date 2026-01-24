@@ -16,6 +16,7 @@ export class GdmLiveAudio extends LitElement {
   @state() status = '';
   @state() error = '';
   @state() lastFailedUrl = '';
+  @state() volume = 0;
   @state() apiKey = localStorage.getItem('gemini_api_key') || '';
 
   private workletLoaded = false;
@@ -154,6 +155,25 @@ export class GdmLiveAudio extends LitElement {
       border-radius: 4px;
       max-width: 80%;
       word-break: break-all;
+    }
+
+    .volume-meter-container {
+      position: absolute;
+      bottom: 16vh;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 150px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      z-index: 10;
+    }
+
+    .volume-meter-bar {
+      height: 100%;
+      background: #4caf50;
+      transition: width 0.1s ease;
     }
   `;
 
@@ -369,12 +389,21 @@ export class GdmLiveAudio extends LitElement {
       this.audioWorkletNode.port.onmessage = (event) => {
         if (!this.isRecording || !this.session) return;
         
+        const pcmData = event.data;
+
+        // 실시간 볼륨 계산 (RMS 방식)
+        let sum = 0;
+        for (let i = 0; i < pcmData.length; i++) {
+          sum += pcmData[i] * pcmData[i];
+        }
+        const rms = Math.sqrt(sum / pcmData.length);
+        this.volume = Math.min(100, rms * 500); // 시각화를 위해 적절히 증폭
+
         // 사용자가 말을 하고 있을 때 상태 표시
         if (this.status !== '🎙️ Speaking...') {
           this.updateStatus('🔴 Hearing...');
         }
 
-        const pcmData = event.data;
         this.session.sendRealtimeInput({media: createBlob(pcmData)});
       };
 
@@ -434,6 +463,8 @@ export class GdmLiveAudio extends LitElement {
                 <h2>Gemini API Key Required</h2>
                 <p>실시간 오디오 대화를 시작하려면 API 키가 필요합니다.</p>
                 <input
+                  id="gemini-api-key"
+                  name="gemini-api-key"
                   type="password"
                   placeholder="Enter your Gemini API Key"
                   .value=${this.apiKey}
@@ -446,6 +477,12 @@ export class GdmLiveAudio extends LitElement {
               </div>
             `
           : ''}
+
+        ${this.isRecording ? html`
+          <div class="volume-meter-container">
+            <div class="volume-meter-bar" style="width: ${this.volume}%"></div>
+          </div>
+        ` : ''}
 
         <div class="controls">
           <button
@@ -491,7 +528,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
-        <div id="version-tag"> [V5.0 - STABLE] </div>
+        <div id="version-tag"> [V6.0 - VISUAL FEEDBACK] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>
