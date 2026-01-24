@@ -21,7 +21,9 @@ export default async function handler(
   const API_KEY = process.env.GEMINI_API_KEY;
 
   if (!API_KEY) {
-    return response.status(500).json({ error: 'GEMINI_API_KEY is not set' });
+    return response.status(500).json({ 
+      error: 'GEMINI_API_KEY가 설정되지 않았습니다. Vercel 프로젝트 설정에서 환경 변수를 확인해주세요.' 
+    });
   }
 
   try {

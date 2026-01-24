@@ -97,6 +97,10 @@ export class GdmLiveAudio extends LitElement {
     try {
       // 보안 서버리스 함수로부터 임시 토큰 가져오기
       const response = await fetch('/api/token');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Server responded with ${response.status}`);
+      }
       const { token, error } = await response.json();
 
       if (error) throw new Error(error);
@@ -218,7 +222,7 @@ export class GdmLiveAudio extends LitElement {
       );
 
       this.scriptProcessorNode.onaudioprocess = (audioProcessingEvent) => {
-        if (!this.isRecording) return;
+        if (!this.isRecording || !this.session) return;
 
         const inputBuffer = audioProcessingEvent.inputBuffer;
         const pcmData = inputBuffer.getChannelData(0);
