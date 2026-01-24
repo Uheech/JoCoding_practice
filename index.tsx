@@ -7,6 +7,13 @@
 import {GoogleGenAI, LiveServerMessage, Modality, Session} from '@google/genai';
 import {LitElement, css, html} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
+
+// V9.0 캐시 파괴 및 실행 확인용 알림
+console.log('!!! CRITICAL: V9.0 SCRIPT STARTING !!!');
+if (typeof window !== 'undefined') {
+  alert('V9.0 Loaded! (Cache Killed)');
+}
+
 import {createBlob, decode, decodeAudioData} from './utils';
 import './visual-3d';
 
@@ -573,7 +580,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
-        <div id="version-tag"> [V8.0 - DEEP DEBUG] </div>
+        <div id="version-tag"> [V9.0 - CACHE KILLED] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>
