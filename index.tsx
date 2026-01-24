@@ -32,6 +32,8 @@ export class GdmLiveAudio extends LitElement {
   private mediaStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private audioWorkletNode: AudioWorkletNode | null = null;
+  private volumeAnalyser: AnalyserNode | null = null;
+  private animationId: number | null = null;
   private sources = new Set<AudioBufferSourceNode>();
 
   static styles = css`
@@ -331,12 +333,13 @@ export class GdmLiveAudio extends LitElement {
       return;
     }
 
-    this.inputAudioContext.resume();
-    this.outputAudioContext.resume();
-
-    this.updateStatus('Requesting microphone access...');
-
     try {
+      // 오디오 엔진을 확실히 깨웁니다.
+      await this.inputAudioContext.resume();
+      await this.outputAudioContext.resume();
+
+      this.updateStatus('Requesting microphone access...');
+
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: false,
@@ -344,16 +347,24 @@ export class GdmLiveAudio extends LitElement {
 
       this.updateStatus('Microphone access granted. Starting capture...');
 
+      // 1. 소스 생성
       this.sourceNode = this.inputAudioContext.createMediaStreamSource(
         this.mediaStream,
       );
+
+      // 2. 볼륨 분석기(AnalyserNode) 생성 및 연결
+      this.volumeAnalyser = this.inputAudioContext.createAnalyser();
+      this.volumeAnalyser.fftSize = 256;
+      this.sourceNode.connect(this.volumeAnalyser);
+
+      // 3. 시각화 노드 연결
       this.sourceNode.connect(this.inputNode);
 
+      // 4. AudioWorklet 설정
       if (!this.workletLoaded) {
-        // AudioWorklet 코드를 인라인 Blob으로 생성 (외부 파일 호출 0%)
         const workletCode = `
           class AudioProcessor extends AudioWorkletProcessor {
-            process(inputs) {
+            process(inputs, outputs) {
               const input = inputs[0];
               if (input && input.length > 0) {
                 const pcmData = input[0];
@@ -364,21 +375,12 @@ export class GdmLiveAudio extends LitElement {
           }
           try {
             registerProcessor('audio-processor', AudioProcessor);
-          } catch (e) {
-            // 이미 등록된 경우 무시
-          }
+          } catch (e) {}
         `;
-        
         const blob = new Blob([workletCode], { type: 'application/javascript' });
         const workletUrl = URL.createObjectURL(blob);
-
-        try {
-          await this.inputAudioContext.audioWorklet.addModule(workletUrl);
-          this.workletLoaded = true;
-        } catch (e: any) {
-          console.error('Worklet loading failed:', e);
-          throw new Error('오디오 처리 모듈 로드 실패: ' + e.message);
-        }
+        await this.inputAudioContext.audioWorklet.addModule(workletUrl);
+        this.workletLoaded = true;
       }
 
       this.audioWorkletNode = new AudioWorkletNode(
@@ -388,35 +390,59 @@ export class GdmLiveAudio extends LitElement {
 
       this.audioWorkletNode.port.onmessage = (event) => {
         if (!this.isRecording || !this.session) return;
-        
         const pcmData = event.data;
-
-        // 실시간 볼륨 계산 (RMS 방식)
-        let sum = 0;
-        for (let i = 0; i < pcmData.length; i++) {
-          sum += pcmData[i] * pcmData[i];
-        }
-        const rms = Math.sqrt(sum / pcmData.length);
-        this.volume = Math.min(100, rms * 500); // 시각화를 위해 적절히 증폭
-
-        // 사용자가 말을 하고 있을 때 상태 표시
-        if (this.status !== '🎙️ Speaking...') {
-          this.updateStatus('🔴 Hearing...');
-        }
-
         this.session.sendRealtimeInput({media: createBlob(pcmData)});
       };
 
+      // 5. 파이프라인 완성
       this.sourceNode.connect(this.audioWorkletNode);
       this.audioWorkletNode.connect(this.inputAudioContext.destination);
 
       this.isRecording = true;
-      this.updateStatus('🔴 Recording... Capturing PCM chunks.');
+      this.updateStatus('🔴 Listening...');
+
+      // 6. 볼륨 미터 애니메이션 시작
+      this.startVolumeMeter();
+      
     } catch (err: any) {
       console.error('Error starting recording:', err);
       this.updateStatus(`Error: ${err.message}`);
       this.stopRecording();
     }
+  }
+
+  private startVolumeMeter() {
+    if (!this.volumeAnalyser || !this.isRecording) return;
+
+    const bufferLength = this.volumeAnalyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const update = () => {
+      if (!this.isRecording || !this.volumeAnalyser) return;
+      
+      this.volumeAnalyser.getByteFrequencyData(dataArray);
+      
+      // 평균 볼륨 계산
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / bufferLength;
+      
+      // 상태 메시지 자동 전환 로직
+      if (average > 10) { // 소리가 감지될 때
+        if (this.status !== '🎙️ Speaking...') {
+          this.updateStatus('🔴 Hearing...');
+        }
+      } else if (this.status === '🔴 Hearing...') {
+        this.updateStatus('🔴 Listening...');
+      }
+
+      this.volume = Math.min(100, average * 1.5); // 민감도 조정
+      this.animationId = requestAnimationFrame(update);
+    };
+
+    this.animationId = requestAnimationFrame(update);
   }
 
   private stopRecording() {
@@ -425,11 +451,22 @@ export class GdmLiveAudio extends LitElement {
 
     this.updateStatus('Stopping recording...');
 
-    this.isRecording = false;
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
 
-    if (this.audioWorkletNode && this.sourceNode && this.inputAudioContext) {
+    this.isRecording = false;
+    this.volume = 0;
+
+    if (this.audioWorkletNode && this.sourceNode) {
       this.audioWorkletNode.disconnect();
       this.sourceNode.disconnect();
+    }
+    
+    if (this.volumeAnalyser) {
+      this.volumeAnalyser.disconnect();
+      this.volumeAnalyser = null;
     }
 
     this.audioWorkletNode = null;
@@ -440,7 +477,7 @@ export class GdmLiveAudio extends LitElement {
       this.mediaStream = null;
     }
 
-    this.updateStatus('Recording stopped. Click Start to begin again.');
+    this.updateStatus('Recording stopped.');
   }
 
   private reset() {
@@ -528,7 +565,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
-        <div id="version-tag"> [V6.0 - VISUAL FEEDBACK] </div>
+        <div id="version-tag"> [V7.0 - ULTIMATE] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>
