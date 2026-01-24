@@ -29,7 +29,7 @@ export default async function handler(
   try {
     // Google Gemini API에 Ephemeral Token 요청
     const googleResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1alpha/projects/-/locations/-/authtokens:create?key=${API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1alpha/models/gemini-2.0-flash-exp:generateAccessToken?key=${API_KEY}`,
       {
         method: 'POST',
         headers: {
@@ -38,7 +38,6 @@ export default async function handler(
         body: JSON.stringify({
           config: {
             uses: 1, // 1회 세션용
-            // 30분 후 만료 (기본값)
           },
         }),
       }
@@ -50,14 +49,14 @@ export default async function handler(
       console.error(`Google API Error (${googleResponse.status}):`, responseText);
       return response.status(googleResponse.status).json({ 
         error: `Google API error (${googleResponse.status})`,
-        details: responseText.slice(0, 500) // 너무 길면 잘라서 전달
+        details: responseText.slice(0, 500)
       });
     }
 
     try {
       const data = JSON.parse(responseText);
-      // 클라이언트에게 토큰 전달
-      return response.status(200).json({ token: data.name });
+      // 클라이언트에게 토큰 전달 (generateAccessToken은 'token' 필드에 값을 반환함)
+      return response.status(200).json({ token: data.token });
     } catch (parseError) {
       console.error('JSON Parse Error:', responseText);
       return response.status(500).json({ 
