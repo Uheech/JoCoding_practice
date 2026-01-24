@@ -15,6 +15,7 @@ export class GdmLiveAudio extends LitElement {
   @state() isRecording = false;
   @state() status = '';
   @state() error = '';
+  @state() lastFailedUrl = '';
   @state() apiKey = localStorage.getItem('gemini_api_key') || '';
 
   private client!: GoogleGenAI;
@@ -128,11 +129,30 @@ export class GdmLiveAudio extends LitElement {
       position: absolute;
       bottom: 10px;
       right: 10px;
-      color: rgba(255, 255, 255, 0.3);
-      font-size: 10px;
+      color: #ff4444;
+      font-size: 12px;
+      font-weight: bold;
       font-family: monospace;
       z-index: 100;
       pointer-events: none;
+      background: rgba(0,0,0,0.5);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    #error-monitor {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #ff4444;
+      font-size: 12px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.8);
+      padding: 10px;
+      border: 1px solid #ff4444;
+      border-radius: 4px;
+      max-width: 80%;
+      word-break: break-all;
     }
   `;
 
@@ -144,6 +164,21 @@ export class GdmLiveAudio extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.initClient();
+
+    // 네트워크 및 자원 로드 에러 감지기
+    window.addEventListener('error', (e) => {
+      if (e.target instanceof HTMLImageElement || e.target instanceof HTMLScriptElement || e.target instanceof HTMLLinkElement) {
+        const url = (e.target as any).src || (e.target as any).href;
+        this.lastFailedUrl = `Load Failed: ${url}`;
+      }
+    }, true);
+
+    // fetch 에러 가로채기 시도
+    const originalFetch = window.fetch;
+    window.fetch = (...args) => originalFetch(...args).catch(err => {
+      this.lastFailedUrl = `Fetch Failed: ${args[0]}`;
+      throw err;
+    });
   }
 
   private initAudio() {
@@ -384,6 +419,7 @@ export class GdmLiveAudio extends LitElement {
   render() {
     return html`
       <div>
+        ${this.lastFailedUrl ? html`<div id="error-monitor">⚠️ 404/Error Detect: ${this.lastFailedUrl}</div>` : ''}
         ${!this.apiKey
           ? html`
               <div class="api-key-overlay">
@@ -447,7 +483,7 @@ export class GdmLiveAudio extends LitElement {
         </div>
 
         <div id="status"> ${this.error} </div>
-        <div id="version-tag"> [V3.0 - CLEAN] </div>
+        <div id="version-tag"> [V4.0 - DEBUG MODE] </div>
         <gdm-live-audio-visuals-3d
           .inputNode=${this.inputNode}
           .outputNode=${this.outputNode}></gdm-live-audio-visuals-3d>

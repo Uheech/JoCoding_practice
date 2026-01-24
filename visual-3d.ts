@@ -114,7 +114,7 @@ export class GdmLiveAudioVisuals3D extends LitElement {
     const geometry = new THREE.IcosahedronGeometry(1, 10);
 
     const loader = new EXRLoader();
-    loader.load('piz_compressed.exr', (texture: THREE.Texture) => {
+    loader.load('/piz_compressed.exr', (texture: THREE.Texture) => {
       texture.mapping = THREE.EquirectangularReflectionMapping;
       const exrCubeRenderTarget = pmremGenerator.fromEquirectangular(texture);
       sphereMaterial.envMap = exrCubeRenderTarget.texture;
