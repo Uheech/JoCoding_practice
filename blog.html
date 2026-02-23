@@ -11,6 +11,13 @@
 
       gtag('config', 'G-JLMKM1HCV1');
     </script>
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "vlnrlwpnrr");
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>비즈니스 인사이트 블로그 - Strategic Partners</title>
@@ -60,6 +67,25 @@
                     <a href="blog/article5.html" class="read-more">전체 읽기 &rarr;</a>
                 </article>
             </div>
+        </section>
+
+        <!-- Disqus Section for Blog -->
+        <section id="blog-comments">
+            <h2>인사이트 공유 및 토론</h2>
+            <p>위 아티클들에 대한 의견이나 추가적인 질문이 있으시면 댓글로 남겨주세요.</p>
+            <div id="disqus_thread"></div>
+            <script>
+                var disqus_config = function () {
+                    this.page.url = "https://your-site-name.pages.dev/blog.html";
+                    this.page.identifier = "blog-page";
+                };
+                (function() {
+                    var d = document, s = d.createElement('script');
+                    s.src = 'https://productbuilder-zjocgasyob.disqus.com/embed.js';
+                    s.setAttribute('data-timestamp', +new Date());
+                    (d.head || d.body).appendChild(s);
+                })();
+            </script>
         </section>
     </main>
 
